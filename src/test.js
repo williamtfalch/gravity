@@ -5,6 +5,7 @@ import Gravity from './Gravity.js'
 import Draw from './Draw.js'
 import Utils from './Utils.js'
 import styled from 'styled-components'
+import Geometry2D from './Geometry2D.js'
 
 const StyledButton = styled.button`
   position: relative;
@@ -31,17 +32,17 @@ const StyledButton = styled.button`
 
 function App() {
   const { height, width }                                         = useWindowDimensions()
-  const [updateFrequency, setUpdateFrequency]                     = useState(50)
+  const [updateFrequency, setUpdateFrequency]                     = useState(5)
   const canvasRef                                                 = useRef(null)
   const [isCreatingNewPlanet, setIsCreatingNewPlanet]             = useState(false)
-  const [numStartingPlanets, setNumStartingPlanets]               = useState(10)
+  const [numStartingPlanets, setNumStartingPlanets]               = useState(2)
   const [newPlanet, setNewPlanet]                                 = useState({})
   const [showInformationBar, setShowInformationBar]               = useState(true)
   const [chanceOfCreatingNewPlanet, setChanceOfCreatingNewPlanet] = useState(0.05)
   const [state, setState]                                         = useState({
     planets: [
-      //{position: {x:200, y:200}, mass:400, radius:Gravity.getPlanetRadius(400), velocity: {x:0, y:0}, id: "abcd", label: {label: "planet"}, color: Utils.generateColor()},
-      //{position: {x:280, y:200}, mass:200, radius:Gravity.getPlanetRadius(200), velocity: {x:0, y:0}, id: "bcde", label: {label: "planet"}, color: Utils.generateColor()}
+      {position: {x:400, y:400}, mass:2000, radius:Gravity.getPlanetRadius(2000), velocity: {x:0, y:0}, id: "abcd", label: {label: "planet"}, color: Utils.generateColor()},
+      {position: {x:1600, y:900}, mass:100, radius:Gravity.getPlanetRadius(100), velocity: {x:0, y:0}, id: "bcde", label: {label: "planet"}, color: Utils.generateColor()},
     ],
     accelerations: {},
     velocities: {},
@@ -50,7 +51,7 @@ function App() {
 
   const onCanvasMouseDown = event => {
     setIsCreatingNewPlanet(true)
-    setNewPlanet({position: {x: event.clientX, y: event.clientY}, velocity: {x:0,y:0}, mass: 100, radius: Gravity.getPlanetRadius(100), id: Utils.generateId(), color: Utils.generateColor(0.5), label: {label: "planet"}})
+    setNewPlanet({position: {x: event.clientX, y: event.clientY}, velocity: {x:0,y:0}, mass: 100, radius: Gravity.getPlanetRadius(100), id: "1234", color: Utils.generateColor(0.5), label: {label: "planet"}})
   }
 
   const onCanvasMouseUp = event => {
@@ -117,8 +118,8 @@ function App() {
   }
 
   const init = function() {
-    const initialPlanets = Gravity.generatePlanets(width, height, numStartingPlanets)
-    setState({planets: initialPlanets, velocities: {}, accelerations: {}, eyeCandy: []})
+    //const initialPlanets = Gravity.generatePlanets(width, height, numStartingPlanets)
+    //setState({planets: initialPlanets, velocities: {}, accelerations: {}, eyeCandy: []})
   }
 
   // effects
@@ -148,6 +149,24 @@ function App() {
     const maybeAPlanet = chanceToMakeNewPlanet(nextState.planets)
 
     nextState.planets = nextState.planets.concat(maybeAPlanet)
+
+    if (nextState.planets.length === 3) {
+      let b
+      let s
+
+      for (let planet of nextState.planets) {
+        if (planet.id === "abcd") {
+          b = planet
+        }
+
+        if (planet.id === "1234") {
+          s = planet
+        }
+      }
+
+
+      console.log(Geometry2D.doCirclesIntersect(b.position,s.position, b.radius,s.radius))
+    } 
 
     setState(nextState)
     
