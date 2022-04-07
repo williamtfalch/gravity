@@ -6,6 +6,13 @@ import Draw from './Draw.js'
 import Utils from './Utils.js'
 import styled from 'styled-components'
 
+const StyledApp = styled.div`
+  > canvas {
+    position: absolute;
+    z-index: 2000;
+  }
+`;
+
 const StyledButton = styled.button`
   position: relative;
   top: ${props => props.styles.top}px;
@@ -18,7 +25,7 @@ const StyledButton = styled.button`
   background-color: #9bb2c2;
   opacity: 0.8;
   color: "#23333d";
-  z-index: 2;
+  z-index: 2100;
 
   &:hover {
     opacity: 0.9;
@@ -29,7 +36,7 @@ const StyledButton = styled.button`
   }
 `;
 
-function App() {
+function App(props) {
   const { height, width }                                         = useWindowDimensions()
   const [updateFrequency, setUpdateFrequency]                     = useState(50)
   const canvasRef                                                 = useRef(null)
@@ -125,6 +132,10 @@ function App() {
 
   useEffect(() => {
     init()
+
+    if (props.onLoaded) {
+      props.onLoaded()
+    }
   }, [])
 
 
@@ -156,11 +167,11 @@ function App() {
   }, Math.floor(1000/updateFrequency))
 
   return (
-    <div className="App">
+    <StyledApp>
       <canvas ref={canvasRef} width={width} height={height} />
       <StyledButton styles={{top: height - 45}} onClick={() => init()}>{"Refresh"}</StyledButton>
       <StyledButton styles={{top: height - 45}} onClick={() => setShowInformationBar(!showInformationBar)}>{`${showInformationBar ? "Hide" : "Show"} information`}</StyledButton>
-    </div>
+    </StyledApp>
   )
 }
 
