@@ -136,20 +136,16 @@ const Geometry2D = {
     return 1 + (Math.floor((radians%(2*Math.PI))/(Math.PI/2)))
   },
 
-  isCircleWithinBounds: function(circle, width, height) {
-    if (
-      (circle.position.x + circle.radius > width)
+  isCircleWithinBounds: function(circle, canvasWidth, canvasHeight) {
+    return !(
+      (circle.position.x + circle.radius > canvasWidth)
       ||
       (circle.position.x - circle.radius < 0)
       ||
-      (circle.position.y + circle.radius > height)
+      (circle.position.y + circle.radius > canvasHeight)
       ||
       (circle.position.y - circle.radius < 0)
-    ) {
-      return false
-    }
-
-    return true
+    );
   }
 }
 

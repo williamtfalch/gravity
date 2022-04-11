@@ -2,7 +2,7 @@ import Utils from './Utils.js'
 import Geometry2D from './Geometry2D.js'
 
 const Gravity = {
-  movePlanets: function(planets, w, h) {
+  positionPlanets: function(planets, w, h) {
     const movedPlanets = []
 
     for (let planet of planets) {
@@ -14,7 +14,7 @@ const Gravity = {
       copiedPlanet.position.x += planet.velocity.x
       copiedPlanet.position.y += planet.velocity.y
 
-      // for x
+      // check if planet hit canvas bounds in x direction
       if (signX === 1) {
         if (copiedPlanet.position.x >= w - planet.radius) {
           copiedPlanet.position.x = w - planet.radius
@@ -27,7 +27,7 @@ const Gravity = {
         }
       }
 
-      // for y
+      // check if planet hit canvas bounds in y direction
       if (signY === 1) {
         if (copiedPlanet.position.y >= h - planet.radius) {
           copiedPlanet.position.y = h - planet.radius
@@ -50,8 +50,7 @@ const Gravity = {
     return velocity * mass
   },
 
-  getAccelerations: function(planets) {
-    const G                         = 6.67408 * Math.pow(10, -2) //6.67408 * Math.pow(10, -11)
+  getUpdatedAccelerations: function(planets, G) {
     const gravitationalForceFn      = (m1,m2,r) => (G * (m1*m2))/Math.pow(r, 2)
     const accelerationFn            = (f, m) => f/m
     const accelerations             = {}
@@ -61,10 +60,10 @@ const Gravity = {
     }
 
     for (let i=0;i<planets.length;i++) {
-      if (planets[i].label.label === "newborn") continue
+      if (planets[i].label.type === "newborn") continue
 
       for (let j=0;j<planets.length;j++) {
-        if (i === j || planets[j].label.label === "newborn") continue
+        if (i === j || planets[j].label.type === "newborn") continue
 
         let diffX = planets[i].position.x - planets[j].position.x
         let diffY = planets[i].position.y - planets[j].position.y
@@ -96,24 +95,23 @@ const Gravity = {
       const vals = Object.values(accelerations[id])
       
       accelerations[id] = {
-        x: vals.reduce(function(a,b) { return a + b.x}, 0),
-        y: vals.reduce(function(a,b) { return a + b.y}, 0)
+        x: vals.reduce((a,b) => a + b.x, 0),
+        y: vals.reduce((a,b) => a + b.y, 0)
       }
     }
 
     return accelerations
   },
 
-  getVelocities: function(planets, accelerations) {
+  getUpdatedVelocities: function(planets, accelerations) {
     const velocities = {}
 
-
     for (let planet of planets) {
-      const id = planet.id
-      velocities[id] = {}
+      const planetId = planet.id
+      velocities[planetId] = {}
 
-      for (let key in accelerations[id]) {
-        velocities[id][key] = planet.velocity[key] + accelerations[id][key];
+      for (let axis in accelerations[planetId]) {
+        velocities[planetId][axis] = planet.velocity[axis] + accelerations[planetId][axis]
       }
     }
 
@@ -124,7 +122,7 @@ const Gravity = {
     return 5 + Math.floor((mass-100)/10)
   },
 
-  updateVelocitiesAndAccelerations: function(planets, velocities, accelerations) {
+  updateKinematics: function(planets, velocities, accelerations) {
     const updatedPlanets = Object.assign([], planets)
 
     for (let i in updatedPlanets) {
@@ -136,35 +134,42 @@ const Gravity = {
   },
 
   generatePlanet: function(planets, canvasWidth, canvasHeight, predecidedProperties = {}) {
-    let planet = {}
-    const mass = Utils.generateFloat(430, 100)
+    const mass = predecidedProperties.hasOwnProperty("mass") ? predecidedProperties.mass : Utils.generateFloat(430, 100)
 
-    planet.mass = mass
-    planet.radius = this.getPlanetRadius(mass)
-    planet.id = Utils.generateId()
-    planet.color = Utils.generateColor()
-    planet.velocity = {
-      x: Utils.generateFloat(0.3, -0.3),
-      y: Utils.generateFloat(0.3, -0.3)
-    }
-    planet.label = {
-      label: "planet"
-    }
-    
-    let dontHavePosition = true
-
-    while (dontHavePosition) {
-      dontHavePosition = false
-      planet.position = {
-        x: Utils.generateInt(canvasWidth - planet.radius, planet.radius),
-        y: Utils.generateInt(canvasHeight - planet.radius, planet.radius)
+    let planet = {
+      mass,
+      radius: this.getPlanetRadius(mass),
+      id: Utils.generateId(),
+      color: Utils.generateColor(),
+      velocity: {
+        x: Utils.generateFloat(0.3, -0.3),
+        y: Utils.generateFloat(0.3, -0.3),
+      },
+      acceleration: {
+        x: 0,
+        y: 0,
+      },
+      label: {
+        type: "planet"
       }
+    }
 
-      if (planets.length > 0) {
-        for (let p of planets) {
-          if (Geometry2D.doCirclesIntersect(planet.position, p.position, planet.radius, p.radius)) {
-            dontHavePosition = true
-            break
+    if (!predecidedProperties.hasOwnProperty("position")) {
+      let dontHavePosition = true
+
+      while (dontHavePosition) {
+        dontHavePosition = false
+        planet.position = {
+          x: Utils.generateInt(canvasWidth - planet.radius, planet.radius),
+          y: Utils.generateInt(canvasHeight - planet.radius, planet.radius)
+        }
+
+        if (planets.length > 0) {
+          for (let p of planets) {
+            if (Geometry2D.doCirclesIntersect(planet.position, p.position, planet.radius, p.radius)) {
+              dontHavePosition = true
+              break
+            }
           }
         }
       }
@@ -203,6 +208,10 @@ const Gravity = {
         position: {
           x: xCoordinate,
           y: yCoordinate
+        },
+        acceleration: {
+          x: 0,
+          y: 0
         }
       })
 
@@ -213,25 +222,25 @@ const Gravity = {
   },
 
   getIntersections: function(planets) {
-    const collisions = {}
+    const intersections = {}
 
     for (let i=0;i<planets.length;i++) {
-      if (planets[i].label.label === "newborn") continue
+      if (planets[i].label.type === "newborn") continue
 
       for (let j=0;j<planets.length;j++) {
-        if (i === j || planets[j].label.label === "newborn") continue
+        if (i === j || planets[j].label.type === "newborn") continue
 
         if (Geometry2D.doCirclesIntersect(planets[i].position, planets[j].position, planets[i].radius, planets[j].radius)) {
-          if (!(planets[i].id in collisions)) {
-            collisions[planets[i].id] = {}
+          if (!intersections.hasOwnProperty(planets[i].id)) {
+            intersections[planets[i].id] = {}
           }
 
-          collisions[planets[i].id][planets[j].id] = Geometry2D.getCircleIntersectionPoints(planets[i].position.x, planets[i].position.y, planets[i].radius, planets[j].position.x, planets[j].position.y, planets[j].radius)
+          intersections[planets[i].id][planets[j].id] = Geometry2D.getCircleIntersectionPoints(planets[i].position.x, planets[i].position.y, planets[i].radius, planets[j].position.x, planets[j].position.y, planets[j].radius)
         }
       }
     }
 
-    return collisions
+    return intersections
   },
 
   filterIntersections: function(planets, intersections) {
@@ -241,7 +250,9 @@ const Gravity = {
     for (let id2ind of ids2index) id2index[id2ind[0]] = id2ind[1]
     
     for (let planet of planets) {
-      if (!(planet.id in intersections)) continue
+      if (!intersections.hasOwnProperty(planet.id )) {
+        continue
+      }
 
       collisions[planet.id] = []
 
@@ -326,8 +337,8 @@ const Gravity = {
   },
 
   getCollisions: function(planets) {
-    const intersections = this.getIntersections(planets)
-    const collisions = this.filterIntersections(planets, intersections)
+    const intersections    = this.getIntersections(planets)
+    const collisions       = this.filterIntersections(planets, intersections)
     const mergedCollisions = this.mergeCollisions(collisions)
 
     return [mergedCollisions, intersections]
@@ -337,12 +348,12 @@ const Gravity = {
     const labeledPlanets = Object.assign([], planets)
 
     for (let i=0;i<labeledPlanets.length;i++) {
-      if (labeledPlanets[i].id in collisions) {
+      if (collisions.hasOwnProperty(labeledPlanets[i].id)) {
         labeledPlanets[i].label = {
-          label: "collision",
+          type: "collision",
           bodies: collisions[labeledPlanets[i].id]
         }
-      } else if (labeledPlanets[i].label.label === "newborn") {
+      } else if (labeledPlanets[i].label.type === "newborn") {
         if (!Geometry2D.isCircleWithinBounds(labeledPlanets[i], canvasWidth, canvasHeight)) continue
 
         let isOverlapping = false
@@ -362,13 +373,13 @@ const Gravity = {
           if (labeledPlanets[i].label.remainingFrames <= 0) {
             labeledPlanets[i].color = Utils.generateColor()
             labeledPlanets[i].label = {
-              label: "planet"
+              type: "planet"
             }
           }
         }
       } else {
         labeledPlanets[i].label = {
-          label: "planet"
+          type: "planet"
         }
       }
     }
@@ -376,6 +387,7 @@ const Gravity = {
     return labeledPlanets
   },
 
+  // this function is a hot mess but I can't be bothered to condense it
   mergePlanets: function(labeledPlanets, intersections, updateFrequency) {
     const mergedPlanets = Object.assign([], labeledPlanets)
     let eyeCandy = []
@@ -384,7 +396,7 @@ const Gravity = {
     for (let id2p of ids2planets) id2planet[id2p[0]] = id2p[1]
 
     for (let i=mergedPlanets.length-1;i >= 0;i--) {
-      if (mergedPlanets[i].label.label === "collision") {
+      if (mergedPlanets[i].label.type === "collision") {
         const collisionees = intersections[mergedPlanets[i].id]
         const isBiggest = mergedPlanets[i].mass > Math.max(...Object.keys(collisionees).map(id => id2planet[id].mass))
 
@@ -397,12 +409,10 @@ const Gravity = {
 
           // HIT
           if (overlappingArea/smallerCircleArea > threshold) {
-            let j
-
-            for (j=0;j<mergedPlanets.length;j++) {
-              if (mergedPlanets[j].id !== collisionee) continue
-
-              const massRatio = mergedPlanets[i].mass/mergedPlanets[j].mass
+            for (let j=0;j<mergedPlanets.length;j++) {
+              if (mergedPlanets[j].id !== collisionee) {
+                continue
+              }
               
               const momentumXI = this.getMomentum(mergedPlanets[i].velocity.x, mergedPlanets[i].mass)
               const momentumYI = this.getMomentum(mergedPlanets[i].velocity.y, mergedPlanets[i].mass)
@@ -454,7 +464,7 @@ const Gravity = {
 
               const numEyeCandy = Math.ceil(mergedPlanets[i].radius * 2 * Math.random()/2)
 
-              eyeCandy = eyeCandy.concat(Array(numEyeCandy).fill().map(function(ec) {
+              eyeCandy = eyeCandy.concat(Array(numEyeCandy).fill().map( _ => {
                 const radius = (Math.random() * diff) + (0.5 * diff)
                 const midRadian = (start + radius + (Math.random() * (diff - (2 * radius))))%(2*Math.PI)
                 const position = Geometry2D.radians2point(midRadian, mergedPlanets[j])
@@ -487,16 +497,16 @@ const Gravity = {
     return [mergedPlanets, eyeCandy]
   },
 
-  updateMassAndColor: function(planets) {
+  updateStructure: function(planets) {
     const updatedPlanets = Object.assign([], planets)
-
+    
     for (let i=0;i<planets.length;i++) {
-      if ("addition" in updatedPlanets[i]) {
+      if (updatedPlanets[i].hasOwnProperty("addition")) {
         if (updatedPlanets[i].addition.remainingFrames > 0) {
-          updatedPlanets[i].mass += updatedPlanets[i].addition.deltaMass
-          updatedPlanets[i].radius = this.getPlanetRadius(updatedPlanets[i].mass)
+          updatedPlanets[i].mass                     += updatedPlanets[i].addition.deltaMass
+          updatedPlanets[i].radius                    = this.getPlanetRadius(updatedPlanets[i].mass)
           updatedPlanets[i].addition.remainingFrames -= 1
-          updatedPlanets[i].color = Utils.blendColors(updatedPlanets[i].addition.originalColor, updatedPlanets[i].addition.mergeColor, 0.3 * (1 - (updatedPlanets[i].addition.remainingFrames/updatedPlanets[i].addition.numFrames)))
+          updatedPlanets[i].color                     = Utils.blendColors(updatedPlanets[i].addition.originalColor, updatedPlanets[i].addition.mergeColor, 0.3 * (1 - (updatedPlanets[i].addition.remainingFrames/updatedPlanets[i].addition.numFrames)))
         } else {
           delete updatedPlanets[i].addition
         }
@@ -527,21 +537,80 @@ const Gravity = {
     return updatedEyeCandy
   },
 
-  getNextState: function(state, canvasWidth, canvasHeight, updateFrequency) {
-    const updatedMassPlanets = this.updateMassAndColor(state.planets)
+  possiblyCreateNewPlanet: function(planets, w, h, newPlanetFrequency, updateFrequency) {
+    let planet                 = false
+    const newPlanetProbability = newPlanetFrequency / updateFrequency
 
-    const accelerations = this.getAccelerations(updatedMassPlanets)
-    const velocities = this.getVelocities(updatedMassPlanets, accelerations)
+    if (Math.random() < newPlanetProbability) {
+      const mass               = Utils.generateInt(500, 120)
+      const radius             = this.getPlanetRadius(mass)
 
-    const updatedVelocityAndAccelerationPlanets = this.updateVelocitiesAndAccelerations(updatedMassPlanets, velocities, accelerations)
-    const movedPlanets = this.movePlanets(updatedVelocityAndAccelerationPlanets, canvasWidth, canvasHeight)
-    const [collisions, intersections] = this.getCollisions(movedPlanets)
-    const labeledPlanets = this.labelPlanets(movedPlanets, collisions, canvasWidth, canvasHeight)
+      const xInside            = (Math.random() > 0.5 ? true : false)
+      const yInside            = !xInside
+
+      const properties         = {}
+      properties.position      = {
+        x: (xInside ? Utils.generateInt(w  - radius, radius) : (Math.random() > 0.5 ? w + radius : -radius)),
+        y: (yInside ? Utils.generateInt(h - radius, radius) : (Math.random() > 0.5 ? h + radius : -radius)),
+      }
+      properties.velocity = {
+        x: Utils.generateFloat(0.3, 0.15) * (Math.sign(properties.position.x) === 1 ? -1 : 1),
+        y: Utils.generateFloat(0.3, 0.15) * (Math.sign(properties.position.y) === 1 ? -1 : 1)
+      }
+      properties.mass          = mass
+      properties.radius        = radius
+      properties.label         = {
+        type: "newborn",
+        remainingFrames: 3 * updateFrequency
+      }
+
+      planet                   = this.generatePlanet(planets, w, h, properties)
+    }
+
+    return planet
+  },
+
+  getInitialState: function(canvasWidth, canvasHeight, numInitialPlanets) {
+    const initialPlanets = this.generatePlanets(canvasWidth, canvasHeight, numInitialPlanets)
+    const initialState   = {
+      planets      : initialPlanets,
+      velocities   :{},
+      accelerations: {},
+      eyeCandy     : []
+    }
+    
+    return initialState
+  },
+
+  updateMovement: function(planets, G, w, h) {
+    const accelerations     = this.getUpdatedAccelerations(planets, G)
+    const velocities        = this.getUpdatedVelocities(planets, accelerations)
+    const updatedKinematics = this.updateKinematics(planets, velocities, accelerations)
+
+    const positionedPlanets = this.positionPlanets(updatedKinematics, w, h)
+
+    return positionedPlanets
+  },
+
+  handleInteractions: function(planets, w, h, eyeCandy, updateFrequency) {
+    const [collisions, intersections]         = this.getCollisions(planets)
+    const labeledPlanets                      = this.labelPlanets(planets, collisions, w, h)
     const [mergedPlanets, additionalEyeCandy] = this.mergePlanets(labeledPlanets, intersections, updateFrequency)
 
-    const eyeCandy = this.updateEyeCandy(state.eyeCandy, additionalEyeCandy)
-  
-    return {planets: mergedPlanets, accelerations, velocities, intersections, eyeCandy}
+    const updatedEyeCandy                     = this.updateEyeCandy(eyeCandy, additionalEyeCandy)
+
+    return [mergedPlanets, updatedEyeCandy, intersections]
+  },
+
+  getNextState: function(state, canvasWidth, canvasHeight, variables) {
+    const structuredPlanets                            = this.updateStructure(state.planets)
+    const movedPlanets                                 = this.updateMovement(structuredPlanets, variables.G, canvasWidth, canvasHeight)
+    const [interactedPlanets, eyeCandy, intersections] = this.handleInteractions(movedPlanets, canvasWidth, canvasHeight, state.eyeCandy, variables.updateFrequency)
+
+    const possibleNewPlanet                            = this.possiblyCreateNewPlanet(interactedPlanets, canvasWidth, canvasHeight, variables.newPlanetFrequency, variables.updateFrequency)
+    const planets                                      = possibleNewPlanet ? [...interactedPlanets, possibleNewPlanet] : interactedPlanets
+
+    return {planets, intersections, eyeCandy}
   }
 }
 

@@ -67,7 +67,7 @@ const Draw = {
   },
 
   drawPlanet: function(context, planet) {
-    if (planet.label.label === "collision") {
+    if (planet.label.type === "collision") {
       for (let collisions of planet.label.bodies) {
         this.drawCircle(context, planet.position.x, planet.position.y, planet.radius, collisions[0], collisions[1], planet.color)
       }
@@ -179,9 +179,9 @@ const Draw = {
   },
 
   fillCanvas: function(context, state, canvasWidth, canvasHeight, showInformationBar, newPlanet) {
-    // calcs
-
-    const {planets, velocities, accelerations} = state
+    const planets = state.planets
+    const accelerations = planets.reduce((prev, planet) => ({...prev, [planet.id]: planet.acceleration}), {})
+    const velocities = planets.reduce((prev, planet) => ({...prev, [planet.id]: planet.velocity}), {})
 
     const accelerationHypothenuses = Object.values(accelerations).map(a => Math.hypot(a.x, a.y))
     const minAcc = Math.min(...accelerationHypothenuses)

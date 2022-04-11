@@ -1,31 +1,50 @@
 import { useEffect, useRef, useState } from 'react'
 import { useWindowDimensions, useInterval } from './hooks.js'
-import './cssReset.css'
+import './GlobalStyles.js'
 import Gravity from './Gravity.js'
 import Draw from './Draw.js'
-import Utils from './Utils.js'
 import styled from 'styled-components'
 
 const StyledApp = styled.div`
+  width: 100vw;
+  height: 100vh;
+  position: relative;
+
   > canvas {
     position: absolute;
     z-index: 2000;
   }
+
+  > div {
+    position: absolute;
+    z-index: 2100;
+    bottom: 10px;
+    left: 10px;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    width: 310px;
+
+    > div.buttons {
+      width: inherit;
+      display: flex;
+      flex-direction: row;
+      justify-content: space-between;
+      margin-top: 10px;
+    }
+  }
 `;
 
 const StyledButton = styled.button`
-  position: relative;
-  top: ${props => props.styles.top}px;
-  left: 10px;
   padding: 10px 10px;
-  margin-right: 10px;
   outline: none;
   border: none;
+  border-radius: 4px;
   cursor: pointer;
   background-color: #9bb2c2;
   opacity: 0.8;
   color: "#23333d";
-  z-index: 2100;
+  z-index: 2200;
 
   &:hover {
     opacity: 0.9;
@@ -36,46 +55,130 @@ const StyledButton = styled.button`
   }
 `;
 
+const StyledVariables = styled.div`
+  z-index: 2200;
+  display: flex;
+  flex-direction: column;
+  border-radius: 4px;
+  background-color: #f5f5f5;
+  border: 1px solid #9bb2c2;
+  padding: 20px 10px 10px 20px;
+
+  > div {
+    display: flex;
+    flex-direction: column;
+    margin-bottom: 5px;
+
+    > span {
+      font-size: 12px;
+      color: "#23333d";
+      margin-bottom: 2px;
+    }
+
+    > input {
+      width: 70px;
+      padding: 8px 5px;
+      margin-left: 2px;
+      border: 1px solid #9bb2c2;
+      border-radius: 4px;
+      outline: none;
+    }
+  }
+`;
+
+function Variables({variables, setVariables}) {
+  const variable2displayName = {
+    "numInitialPlanets" : "Number of initial planets",
+    "G"                 : "Gravitational constant",
+    "updateFrequency"   : "Update frequency",
+    "newPlanetFrequency": "Avg. new planet frequency"
+  }
+
+  const onInputChange = (event, variable) => {
+    let newValue = parseFloat(event.target.value)
+
+    if (!isNaN(newValue)) {
+      if (variable === "numInitialPlanets") {
+        newValue = Math.max(1, newValue)
+      } else {
+        newValue = Math.max(0, newValue)
+      }
+
+      setVariables(prev => ({
+        ...prev,
+        [variable]: newValue
+      }))
+    }
+  }
+
+  return (
+    <StyledVariables>
+      {
+        Object.entries(variables).map(([variable, value]) => (
+          <div>
+            <span>{`${variable2displayName[variable]}:`}</span>
+            <input onChange={(ev) => onInputChange(ev, variable)} defaultValue={value} />
+          </div>
+        ))
+      }
+    </StyledVariables>
+  )
+}
+
 function App(props) {
-  const { height, width }                                         = useWindowDimensions()
-  const [updateFrequency, setUpdateFrequency]                     = useState(50)
-  const canvasRef                                                 = useRef(null)
-  const [isCreatingNewPlanet, setIsCreatingNewPlanet]             = useState(false)
-  const [numStartingPlanets, setNumStartingPlanets]               = useState(10)
-  const [newPlanet, setNewPlanet]                                 = useState({})
-  const [showInformationBar, setShowInformationBar]               = useState(true)
-  const [chanceOfCreatingNewPlanet, setChanceOfCreatingNewPlanet] = useState(0.05)
-  const [state, setState]                                         = useState({
-    planets: [
-      //{position: {x:200, y:200}, mass:400, radius:Gravity.getPlanetRadius(400), velocity: {x:0, y:0}, id: "abcd", label: {label: "planet"}, color: Utils.generateColor()},
-      //{position: {x:280, y:200}, mass:200, radius:Gravity.getPlanetRadius(200), velocity: {x:0, y:0}, id: "bcde", label: {label: "planet"}, color: Utils.generateColor()}
-    ],
-    accelerations: {},
-    velocities: {},
+  const { height, width }                             = useWindowDimensions()
+  const canvasRef                                     = useRef(null)
+  const [newPlanetInProgress, setNewPlanetInProgress] = useState(false)
+  const [newPlanet, setNewPlanet]                     = useState({})
+  const [showInformationBar, setShowInformationBar]   = useState(true)
+  const [showVariables, setShowVariables]             = useState(false)
+  const [variables, setVariables]                     = useState({
+    numInitialPlanets : 10, 
+    G                 : 6.67408 * Math.pow(10, -2), //true constant is 6.67408 * Math.pow(10, -11)
+    updateFrequency   : 50,
+    newPlanetFrequency: 0.1,
+  })
+  const [state, setState]                             = useState({
+    planets: [],
     eyeCandy: []
   })
 
   const onCanvasMouseDown = event => {
-    setIsCreatingNewPlanet(true)
-    setNewPlanet({position: {x: event.clientX, y: event.clientY}, velocity: {x:0,y:0}, mass: 100, radius: Gravity.getPlanetRadius(100), id: Utils.generateId(), color: Utils.generateColor(0.5), label: {label: "planet"}})
+    setNewPlanetInProgress(true)
+    setNewPlanet(Gravity.generatePlanet(
+      state.planets,
+      width, 
+      height,
+      {
+        position: {x: event.clientX, y: event.clientY},
+        velocity: {x:0,y:0},
+        mass: 100,
+      }
+    ))
   }
 
-  const onCanvasMouseUp = event => {
-    if (isCreatingNewPlanet) {
+  const onCanvasMouseUp = _ => {
+    if (newPlanetInProgress) {
       const planet = {
         ...newPlanet,
-        velocity: {x: 0.2 * (event.clientX >= newPlanet.x ? 1 : -1), y: 0.2 * (event.clientY >= newPlanet.y ? 1 : -1)},
-        label: {label: "newborn", remainingFrames: 2 * updateFrequency},
+        velocity: {
+          x: 0.2 * (Math.random() > 0.5 ? 1 : -1),
+          y: 0.2 * (Math.random() > 0.5 ? 1 : -1)
+        },
+        label: {
+          type: "newborn",
+          remainingFrames: 2 * variables.updateFrequency
+        },
       }
 
-      setState(state => ({...state, planets: [...state.planets, planet]}))
+      setState(prevState => ({...prevState, planets: [...prevState.planets, planet]}))
     }
 
-    setIsCreatingNewPlanet(false)
+    setNewPlanetInProgress(false)
   }
 
   const onCanvasMouseMove = event => {
-    if (isCreatingNewPlanet) {
+    if (newPlanetInProgress) {
       const updatedPlanet = {
         ...newPlanet,
         position: {
@@ -88,47 +191,26 @@ function App(props) {
     }
   }
 
-  const chanceToMakeNewPlanet = function(planets) {
-    let planet = []
-    const outcome = Math.random()
-
-    if (outcome > (1 - (((numStartingPlanets + 1 - planets.length) * chanceOfCreatingNewPlanet)/50))) {
-      const mass = Utils.generateInt(500, 120)
-      const radius = Gravity.getPlanetRadius(mass)
-
-      const xInside = (Math.random() > 0.5 ? true : false)
-      const yInside = !xInside
-
-      const properties = {}
-      properties.position = {
-        x: (xInside ? Utils.generateInt(width  - radius, radius) : (Math.random() > 0.5 ? width + radius : -radius)),
-        y: (yInside ? Utils.generateInt(height - radius, radius) : (Math.random() > 0.5 ? height + radius : -radius)),
-      }
-      properties.velocity = {
-        x: Utils.generateFloat(0.3, 0.15) * (Math.sign(properties.position.x) === 1 ? -1 : 1),
-        y: Utils.generateFloat(0.3, 0.15) * (Math.sign(properties.position.y) === 1 ? -1 : 1)
-      }
-      properties.mass = mass
-      properties.radius = radius
-      properties.label = {
-        label: "newborn",
-        remainingFrames: 3 * updateFrequency
-      }
-
-      const planet = Gravity.generatePlanet(planets, width, height, properties)
-
-      planets.push(planet)
-    }
-
-    return planet
-  }
-
   const init = function() {
-    const initialPlanets = Gravity.generatePlanets(width, height, numStartingPlanets)
-    setState({planets: initialPlanets, velocities: {}, accelerations: {}, eyeCandy: []})
+    const initialPlanets = Gravity.generatePlanets(width, height, variables.numInitialPlanets)
+    
+    setState({planets: initialPlanets, eyeCandy: []})
   }
 
-  // effects
+  useEffect(() => {
+    const canvas       = canvasRef.current
+    const context      = canvas.getContext('2d')
+
+    canvas.onmousedown = onCanvasMouseDown
+    canvas.onmouseup   = onCanvasMouseUp
+    canvas.onmousemove = onCanvasMouseMove
+
+    if (newPlanetInProgress) {
+      Draw.fillCanvas(context, state, width, height, showInformationBar, newPlanet)
+    } else {
+      Draw.fillCanvas(context, state, width, height, showInformationBar, false)
+    }
+  }, [state, Draw.fillCanvas, showInformationBar])
 
   useEffect(() => {
     init()
@@ -138,39 +220,35 @@ function App(props) {
     }
   }, [])
 
-
   useEffect(() => {
-    const canvas = canvasRef.current
-    const context = canvas.getContext('2d')
-
-    canvas.onmousedown = onCanvasMouseDown
-    canvas.onmouseup   = onCanvasMouseUp
-    canvas.onmousemove = onCanvasMouseMove
-
-    if (isCreatingNewPlanet) {
-      Draw.fillCanvas(context, state, width, height, showInformationBar, newPlanet)
-    } else {
-      Draw.fillCanvas(context, state, width, height, showInformationBar, false)
-    }
-  }, [state, Draw.fillCanvas, showInformationBar])
+    init()
+  }, [variables.numInitialPlanets])
 
   useInterval(() => {
-    const nextState = Gravity.getNextState(state, width, height, updateFrequency)
-    const maybeAPlanet = chanceToMakeNewPlanet(nextState.planets)
-
-    nextState.planets = nextState.planets.concat(maybeAPlanet)
-
+    const nextState = Gravity.getNextState(state, width, height, variables)
     setState(nextState)
     
-    if (isCreatingNewPlanet) setNewPlanet(newPlanet => ({...newPlanet, mass: newPlanet.mass + (250/updateFrequency), radius: Gravity.getPlanetRadius(newPlanet.mass + (250/updateFrequency))}))
+    if (newPlanetInProgress) {
+      setNewPlanet(planet => ({...planet, mass: planet.mass + (250/variables.updateFrequency), radius: Gravity.getPlanetRadius(planet.mass + (250/variables.updateFrequency))}))
+    }
     
-  }, Math.floor(1000/updateFrequency))
+  }, Math.floor(1000/variables.updateFrequency))
 
   return (
     <StyledApp>
       <canvas ref={canvasRef} width={width} height={height} />
-      <StyledButton styles={{top: height - 45}} onClick={() => init()}>{"Refresh"}</StyledButton>
-      <StyledButton styles={{top: height - 45}} onClick={() => setShowInformationBar(!showInformationBar)}>{`${showInformationBar ? "Hide" : "Show"} information`}</StyledButton>
+
+      <div>
+        {
+          showVariables &&
+            <Variables variables={variables} setVariables={setVariables} />
+        }
+        <div className="buttons">
+          <StyledButton onClick={() => init()}>{"Refresh"}</StyledButton>
+          <StyledButton onClick={() => setShowInformationBar(!showInformationBar)}>{`${showInformationBar ? "Hide" : "Show"} information`}</StyledButton>
+          <StyledButton onClick={() => setShowVariables(prev => !prev)}>{`${showVariables ? "Hide" : "Edit"} variables`}</StyledButton>
+        </div>
+      </div>
     </StyledApp>
   )
 }
